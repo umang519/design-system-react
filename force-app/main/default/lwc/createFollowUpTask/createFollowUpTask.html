@@ -1,0 +1,41 @@
+<template>
+    <div class="slds-p-around_medium">
+        <div class="slds-form-element">
+            <p class="slds-text-body_regular slds-m-bottom_medium">
+                Create a follow-up Task for this Lead. The Task will appear in the Lead's Activity timeline.
+            </p>
+
+            <div
+                lwc:if={hasError}
+                class="slds-form-element__help"
+                role="alert"
+                aria-live="polite"
+                tabindex="-1"
+                data-id="error-message"
+                id="follow-up-error-message"
+            >
+                <span class="slds-assistive-text">Error:</span>
+                {errorMessage}
+            </div>
+
+            <div class="slds-m-top_medium slds-is-relative">
+                <lightning-button
+                    variant="brand"
+                    label="Create Follow-Up Task"
+                    title="Create a follow-up Task for this Lead"
+                    onclick={handleCreateTask}
+                    disabled={isLoading}
+                    aria-describedby={buttonAriaDescribedBy}
+                ></lightning-button>
+
+                <template lwc:if={isLoading}>
+                    <lightning-spinner
+                        alternative-text="Creating follow-up Task"
+                        size="small"
+                        class="slds-m-left_small"
+                    ></lightning-spinner>
+                </template>
+            </div>
+        </div>
+    </div>
+</template>
