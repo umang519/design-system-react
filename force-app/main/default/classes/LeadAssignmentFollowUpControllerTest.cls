@@ -1,89 +1,107 @@
 @isTest
-public with sharing class LeadAssignmentFollowUpControllerTest {
+private class LeadAssignmentFollowUpControllerTest {
 
     @TestSetup
     static void setupData() {
         List<Lead> leads = new List<Lead>();
-        for (Integer i = 0; i < 210; i++) {
-            leads.add(new Lead(LastName = 'TestLead' + i, Company = 'TestCo'));
+        for (Integer i = 0; i < 1000; i++) {
+            leads.add(
+                new Lead(
+                    LastName = 'TestLead ' + i,
+                    Company = 'Test Company',
+                    Status = 'Open - Not Contacted'
+                )
+            );
         }
-        Test.startTest();
         insert leads;
-        Test.stopTest();
     }
 
     @isTest
-    static void testAssignLeadToCurrentUser() {
-        List<Lead> leads = [SELECT Id FROM Lead LIMIT 5];
-        List<Id> leadIds = new List<Id>();
-        for (Lead l : leads) {
-            leadIds.add(l.Id);
-        }
-
-        Test.startTest();
-        Integer assignedCount = LeadAssignmentFollowUpController.assignLeadToCurrentUser(leadIds);
-        Test.stopTest();
-
-        System.assertEquals(leadIds.size(), assignedCount, 'All selected leads should be assigned.');
-        for (Lead l : [SELECT OwnerId FROM Lead WHERE Id IN :leadIds]) {
-            System.assertEquals(UserInfo.getUserId(), l.OwnerId, 'Lead owner should be the current user.');
-        }
-    }
-
-    @isTest
-    static void testAssignLeadToCurrentUserBulk() {
-        List<Lead> leads = [SELECT Id FROM Lead];
-        List<Id> leadIds = new List<Id>();
-        for (Lead l : leads) {
-            leadIds.add(l.Id);
-        }
-
-        Test.startTest();
-        Integer assignedCount = LeadAssignmentFollowUpController.assignLeadToCurrentUser(leadIds);
-        Test.stopTest();
-
-        System.assertEquals(leadIds.size(), assignedCount, 'All bulk leads should be assigned.');
-        System.assertEquals(210, [SELECT COUNT() FROM Lead WHERE OwnerId = :UserInfo.getUserId()], 'All bulk leads should be owned by the current user.');
-    }
-
-    @isTest
-    static void testCreateFollowUpTask() {
+    static void testCreateFollowUpTask_SingleLead() {
         Lead testLead = [SELECT Id FROM Lead LIMIT 1];
-        Date dueDate = Date.today().addDays(2);
+        List<Id> leadIds = new List<Id>{ testLead.Id };
 
         Test.startTest();
-        Integer createdCount = LeadAssignmentFollowUpController.createFollowUpTask(new List<Id>{ testLead.Id }, 'Follow up', dueDate);
+        List<Id> taskIds = LeadAssignmentFollowUpController.createFollowUpTask(leadIds);
         Test.stopTest();
 
-        System.assertEquals(1, createdCount, 'One task should be created.');
-        List<Task> tasks = [SELECT WhatId, Subject, ActivityDate, Status, Priority FROM Task WHERE WhatId = :testLead.Id];
-        System.assertEquals(1, tasks.size(), 'Exactly one task should exist for the lead.');
-        System.assertEquals('Follow up', tasks[0].Subject, 'Task subject should match.');
-        System.assertEquals(dueDate, tasks[0].ActivityDate, 'Task due date should match.');
-        System.assertEquals('Not Started', tasks[0].Status, 'Task status should default to Not Started.');
-        System.assertEquals('Normal', tasks[0].Priority, 'Task priority should default to Normal.');
+        System.assertEquals(1, taskIds.size(), 'Expected one Task Id to be returned.');
+
+        List<Task> tasks = [SELECT Id, WhoId, WhatId FROM Task WHERE Id IN :taskIds];
+        System.assertEquals(1, tasks.size(), 'Expected one Task to be created.');
+        System.assertEquals(testLead.Id, tasks[0].WhoId, 'Task.WhoId should be set to the Lead Id.');
+        System.assertEquals(null, tasks[0].WhatId, 'Task.WhatId should be null.');
     }
 
     @isTest
-    static void testCreateFollowUpTaskBulk() {
-        List<Lead> leads = [SELECT Id FROM Lead];
+    static void testCreateFollowUpTask_Bulk210() {
+        List<Lead> leads = [SELECT Id FROM Lead LIMIT 210];
+        System.assertEquals(210, leads.size(), 'Expected 210 Leads for the bulk test.');
+
         List<Id> leadIds = new List<Id>();
         for (Lead l : leads) {
             leadIds.add(l.Id);
         }
-        Date dueDate = Date.today().addDays(3);
+        Set<Id> leadIdSet = new Set<Id>(leadIds);
 
         Test.startTest();
-        Integer createdCount = LeadAssignmentFollowUpController.createFollowUpTask(leadIds, 'Bulk follow up', dueDate);
+        List<Id> taskIds = LeadAssignmentFollowUpController.createFollowUpTask(leadIds);
         Test.stopTest();
 
-        System.assertEquals(leadIds.size(), createdCount, 'All bulk tasks should be created.');
-        System.assertEquals(210, [SELECT COUNT() FROM Task WHERE Subject = 'Bulk follow up'], 'All bulk follow-up tasks should exist.');
+        System.assertEquals(210, taskIds.size(), 'Expected 210 Task Ids to be returned.');
+
+        List<Task> tasks = [SELECT Id, WhoId, WhatId FROM Task WHERE WhoId IN :leadIds];
+        System.assertEquals(210, tasks.size(), 'Expected 210 Tasks to be created.');
+        for (Task t : tasks) {
+            System.assert(leadIdSet.contains(t.WhoId), 'Task.WhoId should match one of the provided Lead Ids.');
+            System.assertEquals(null, t.WhatId, 'Task.WhatId should be null for every Task.');
+        }
     }
 
     @isTest
-    static void testEmptyInputsReturnZero() {
-        System.assertEquals(0, LeadAssignmentFollowUpController.assignLeadToCurrentUser(new List<Id>()), 'Empty lead list should return zero assignments.');
-        System.assertEquals(0, LeadAssignmentFollowUpController.createFollowUpTask(new List<Id>(), 'Subject', Date.today()), 'Empty lead list should return zero tasks.');
+    static void testCreateFollowUpTask_Bulk1000() {
+        List<Lead> leads = [SELECT Id FROM Lead LIMIT 1000];
+        System.assertEquals(1000, leads.size(), 'Expected 1000 Leads for the bulk test.');
+
+        List<Id> leadIds = new List<Id>();
+        for (Lead l : leads) {
+            leadIds.add(l.Id);
+        }
+        Set<Id> leadIdSet = new Set<Id>(leadIds);
+
+        Test.startTest();
+        List<Id> taskIds = LeadAssignmentFollowUpController.createFollowUpTask(leadIds);
+        Test.stopTest();
+
+        System.assertEquals(1000, taskIds.size(), 'Expected 1000 Task Ids to be returned.');
+
+        List<Task> tasks = [SELECT Id, WhoId, WhatId FROM Task WHERE WhoId IN :leadIds];
+        System.assertEquals(1000, tasks.size(), 'Expected 1000 Tasks to be created.');
+        for (Task t : tasks) {
+            System.assert(leadIdSet.contains(t.WhoId), 'Task.WhoId should match one of the provided Lead Ids.');
+            System.assertEquals(null, t.WhatId, 'Task.WhatId should be null for every Task.');
+        }
+    }
+
+    @isTest
+    static void testCreateFollowUpTask_EmptyListThrowsException() {
+        Boolean exceptionThrown = false;
+        try {
+            LeadAssignmentFollowUpController.createFollowUpTask(new List<Id>());
+        } catch (AuraHandledException ex) {
+            exceptionThrown = true;
+        }
+        System.assert(exceptionThrown, 'Expected an AuraHandledException when an empty list is provided.');
+    }
+
+    @isTest
+    static void testCreateFollowUpTask_NullListThrowsException() {
+        Boolean exceptionThrown = false;
+        try {
+            LeadAssignmentFollowUpController.createFollowUpTask(null);
+        } catch (AuraHandledException ex) {
+            exceptionThrown = true;
+        }
+        System.assert(exceptionThrown, 'Expected an AuraHandledException when a null list is provided.');
     }
 }
